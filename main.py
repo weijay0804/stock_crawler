@@ -104,3 +104,77 @@ class StatementDog:
                 result[i].append(top_last_3)
 
         return result
+
+
+class StockPrice:
+    """
+    取得股票的每日交易價格相關的類別
+    """
+
+    @staticmethod
+    def _translate_stock_data(stock_data: dict) -> dict:
+        """
+        處理由證交所 API 取得的每日交易資訊，只留下必要的資料
+        (代碼、名稱、開高低收)
+        """
+
+        result = []
+
+        for data in stock_data:
+            tmp = {
+                data["Code"]: data["Name"],
+                "opening_price": data["OpeningPrice"],
+                "highest_price": data["HighestPrice"],
+                "lowest_price": data["LowestPrice"],
+                "cloesing_price": data["ClosingPrice"],
+            }
+
+            result.append(tmp)
+
+        return result
+
+    @staticmethod
+    def _translate_mainborad_data(mainborad_data: dict) -> dict:
+        """
+        處理由櫃買中心 API 取得的每日交易資訊，只留下必要的資料
+        (代碼、名稱、開高低收)
+        """
+
+        result = []
+
+        for data in mainborad_data:
+            tmp = {
+                data["SecuritiesCompanyCode"]: data["CompanyName"],
+                "opening_price": data["Open"],
+                "highest_price": data["High"],
+                "lowest_price": data["Low"],
+                "cloesing_price": data["Close"],
+            }
+
+            result.append(tmp)
+
+        return result
+
+    @staticmethod
+    def get_stock_day_all() -> dict:
+        """
+        根據證交所的 API 取得上市股票的每日交易資料
+        """
+
+        response = BaseRequset.get_requset(
+            "https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL"
+        )
+
+        return StockPrice._translate_stock_data(response.json())
+
+    @staticmethod
+    def get_mainborad_day_all() -> dict:
+        """
+        根據櫃買中心的 API 取得上櫃股票的每日交易資訊
+        """
+
+        response = BaseRequset.get_requset(
+            "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes"
+        )
+
+        return StockPrice._translate_mainborad_data(response.json())
