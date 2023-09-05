@@ -2,9 +2,13 @@ import os
 from collections import defaultdict
 from datetime import datetime, timedelta
 
-from bs4 import BeautifulSoup
 import requests
 import openpyxl
+from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 
 class BaseRequset:
@@ -20,6 +24,100 @@ class BaseRequset:
             raise RuntimeError(f"Response error, status code: [{response.status_code}]")
 
         return response
+
+
+class CMoney:
+    """
+    處理有關 CMoney 相關的類別
+
+    會使用 selenium
+    """
+
+    def __init__(self):
+        self.driver = webdriver.Chrome()
+
+    def _get_group_data(self) -> list:
+        """
+        取得前 10 個產業分類名稱
+
+        回傳格式:
+        ```
+        [
+            {"name" : "IC-設計", "url" : "http...."},...
+        ]
+        ```
+        """
+
+        result = []
+
+        items = self.driver.find_element(By.ID, "MainContent").find_elements(By.TAG_NAME, "tr")
+
+        # 取前 10 個
+        for item in items[1:11]:
+            url = item.find_element(By.TAG_NAME, "a").get_attribute("href")
+            name = item.text.split(" ")[0]
+
+            tmp = {"name": name, "url": url}
+
+            result.append(tmp)
+
+        return result
+
+    def get_group_data(self, day_arg: int = "1day") -> dict:
+        """
+        取得增加、減少各前 10 個產業名稱
+
+        day_arg (int): 指定天數參數 (1day, 1week, 1month, 3months)
+
+        回傳格式:
+        ```
+        {
+        "top" : [{"name" : "砷化鎵", "url" : "http...."}, ...],
+        "last" : [{"name" : "家電", "url" : "http...."}, ...]
+        }
+        ```
+        """
+
+        if day_arg == "1day":
+            arg = 1
+        elif day_arg == "1week":
+            arg = 2
+        elif day_arg == "1month":
+            arg = 3
+        elif day_arg == "3months":
+            arg = 4
+        else:
+            raise ValueError("Invalid value for 'day_arg'")
+
+        # 增加和減少的 url
+        top_url = f"https://www.cmoney.tw/finance/f00018.aspx?o=1&o2={arg}"
+        last_url = f"https://www.cmoney.tw/finance/f00018.aspx?o=2&o2={arg}"
+
+        result = {}
+
+        self.driver.get(top_url)
+        locator = (By.CLASS_NAME, "up")
+        WebDriverWait(self.driver, 10).until(
+            EC.presence_of_all_elements_located(locator), "取得增加頁面的資料時出現錯誤"
+        )
+        top_group_data = self._get_group_data()
+
+        self.driver.get(last_url)
+        locator = (By.CLASS_NAME, "down")
+        WebDriverWait(self.driver, 10).until(
+            EC.presence_of_all_elements_located(locator), "取得減少頁面的資料時出現錯誤"
+        )
+        last_group_data = self._get_group_data()
+
+        result["top"] = top_group_data
+        result["last"] = last_group_data
+
+        return result
+
+    def close_driver(self):
+        """關閉瀏覽器 driver"""
+
+        self.driver.close()
 
 
 class StatementDog:
