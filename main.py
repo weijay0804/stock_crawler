@@ -7,6 +7,7 @@ import openpyxl
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
@@ -33,8 +34,14 @@ class CMoney:
     會使用 selenium
     """
 
-    def __init__(self):
-        self.driver = webdriver.Chrome()
+    def __init__(self, is_headless: bool = True):
+        options = None
+
+        if is_headless:
+            options = webdriver.ChromeOptions()
+            options.add_argument("--headless=new")
+
+        self.driver = webdriver.Chrome(options=options)
 
     def _get_group_data(self) -> list:
         """
@@ -111,6 +118,122 @@ class CMoney:
 
         result["top"] = top_group_data
         result["last"] = last_group_data
+
+        return result
+
+    def get_group_top_stock(self, url: str, group_name: str) -> dict:
+        """
+        取得特定產業的前三名股票名稱、代號
+
+        url (str): 產業詳細頁面 url
+        group_name (str): 產業名稱
+
+        回傳格式:
+        ```
+        {
+        "group" : "砷化鎵",
+        "data" : [["3105", "穩懋"], ["2455", "全新"], ["8086", "宏捷科"]]
+        }
+        ```
+        """
+
+        result = {}
+
+        self.driver.get(url)
+        locator = (By.CLASS_NAME, "bk-clr")
+        WebDriverWait(self.driver, 10).until(
+            EC.presence_of_all_elements_located(locator), "取得前三名股票頁面的資料時出現錯誤"
+        )
+
+        stock_table = self.driver.find_element(By.ID, "table1").find_elements(By.TAG_NAME, "tr")
+
+        result["group"] = group_name
+        result["data"] = []
+
+        for i in stock_table[1:4]:
+            data = i.text.split(" ")
+            code = data[1]
+            name = data[2]
+
+            result["data"].append([code, name])
+
+        return result
+
+    def get_data(self, day_arg: str = "1day") -> dict:
+        """
+        取得資金流向的前十產業和股票
+
+        args: 要取得的天數 (1day, 1week, 1month, 3months)
+
+        回傳格式:
+        ```
+        {
+        "top" : [
+            {
+                "group" : "砷化鎵",
+                "data" : [["3105" : "穩懋"], ...]
+            }, ...],
+        "last" : [
+            {
+                "group" : "LCD塑膠框",
+                "data" : [["2371" : "大同"]. ...]
+            }, ...]
+        }
+        ```
+        """
+
+        result = defaultdict(list)
+
+        data = self.get_group_data(day_arg)
+
+        for i in data:
+            for d in data[i]:
+                top_3_stock = self.get_group_top_stock(d["url"], d["name"])
+
+                result[i].append(top_3_stock)
+
+        return result
+
+    def get_final_data(
+        self, stock_price_data: dict, mainborad_price_data: dict, day_arg: str = "1day"
+    ) -> dict:
+        """
+        取得最終處理完的資料，換句話說就是取得開高低收等資訊
+
+        args: 要取得的天數 (1day, 1week, 1month, 3months)
+
+        i.e:
+        ```
+        {
+        "top" : [
+            {"group" : "砷化鎵", "data" : [
+                {"code" : "3105", "name" : "穩懋", "opening_price" : 101.1, "highest_price" : 120.0, "lowest_price" : 100.0, "cloesing_price" : 102.2}, ...]
+            }, ...],
+        "last: [....]
+        }
+        ```
+        """
+
+        result = defaultdict(list)
+        meta_data = self.get_data(day_arg)
+
+        for k in meta_data:
+            for group_data in meta_data[k]:
+                tmp = {}
+                tmp["group"] = group_data["group"]
+                tmp["data"] = []
+
+                for stock in group_data["data"]:
+                    if stock_price_data.get(stock[0]):
+                        tmp["data"].append(stock_price_data[stock[0]])
+
+                    elif mainborad_price_data.get(stock[0]):
+                        tmp["data"].append(mainborad_price_data[stock[0]])
+
+                    else:
+                        tmp["data"].append(None)
+
+                result[k].append(tmp)
 
         return result
 
@@ -449,6 +572,9 @@ class ExcelWriter:
             # 寫入族群名稱
             s1[f"{group_col_code}{6 + (i*3)}"].value = data[i]["group"]
 
+            if not data[i]["data"]:
+                continue
+
             # 控制每個族群中的三筆資料
             for j in range(3):
                 n = i * 3 + j
@@ -533,6 +659,63 @@ class ExcelWriter:
             statement_dog_data["last"],
             5,
             "漲跌幅-前五族群前三檔",
+            reduce_group_col_code,
+            reduce_data_col_start_code,
+            recude_data_col_end_code,
+        )
+
+    def write_cmoney_data(self, cmoney_data: dict, day_type: str = "1day"):
+        if day_type == "1day":
+            raise_group_col_code = "A"
+            raise_data_col_start_code = "C"
+            raise_data_col_end_code = "H"
+
+            reduce_group_col_code = "BA"
+            reduce_data_col_start_code = "BC"
+            recude_data_col_end_code = "BH"
+
+        elif day_type == "1week":
+            raise_group_col_code = "N"
+            raise_data_col_start_code = "P"
+            raise_data_col_end_code = "U"
+
+            reduce_group_col_code = "BN"
+            reduce_data_col_start_code = "BP"
+            recude_data_col_end_code = "BU"
+
+        elif day_type == "1month":
+            raise_group_col_code = "AA"
+            raise_data_col_start_code = "AC"
+            raise_data_col_end_code = "AH"
+
+            reduce_group_col_code = "CA"
+            reduce_data_col_start_code = "CC"
+            recude_data_col_end_code = "CH"
+
+        elif day_type == "3months":
+            raise_group_col_code = "AN"
+            raise_data_col_start_code = "AP"
+            raise_data_col_end_code = "AU"
+
+            reduce_group_col_code = "CN"
+            reduce_data_col_start_code = "CP"
+            recude_data_col_end_code = "CU"
+
+        else:
+            raise ValueError("Invalid value for 'day_type'")
+
+        self._write_data(
+            cmoney_data["top"],
+            10,
+            "資金流向-前十族群前三檔",
+            raise_group_col_code,
+            raise_data_col_start_code,
+            raise_data_col_end_code,
+        )
+        self._write_data(
+            cmoney_data["last"],
+            10,
+            "資金流向-前十族群前三檔",
             reduce_group_col_code,
             reduce_data_col_start_code,
             recude_data_col_end_code,
@@ -725,6 +908,49 @@ if __name__ == "__main__":
     print("寫入完成")
 
     print(f"{'-' * 5} 財報狗資料處理完畢 {'-' * 5}")
+
+    print(f"{'-' * 5} 爬取 CMoney 資料 {'-' * 5}")
+
+    cmoney = CMoney(is_headless=False)
+
+    print("取得 [1day] 資料...")
+
+    cmoney_1day = cmoney.get_final_data(stokc_price_all_day, mainborad_price_all_day, "1day")
+
+    print("爬取完成")
+
+    print("寫入 excel...")
+
+    excel.write_cmoney_data(cmoney_1day, "1day")
+
+    print("寫入完成")
+
+    print("取得 [1week] 資料...")
+    cmoney_1week = cmoney.get_final_data(stokc_price_all_day, mainborad_price_all_day, "1week")
+    print("爬取完成")
+
+    print("寫入 execl...")
+    excel.write_cmoney_data(cmoney_1week, "1week")
+    print("寫入完成")
+
+    print("取得 [1month] 資料...")
+    cmoney_1month = cmoney.get_final_data(stokc_price_all_day, mainborad_price_all_day, "1month")
+    print("爬取完成")
+
+    print("寫入 excel...")
+    excel.write_cmoney_data(cmoney_1month, "1month")
+    print("寫入完成")
+
+    print("取得 [3months] 資料...")
+    cmoney_3months = cmoney.get_final_data(stokc_price_all_day, mainborad_price_all_day, "3months")
+
+    print("爬取完成")
+
+    print("寫入 excel...")
+    excel.write_cmoney_data(cmoney_3months, "3months")
+    print("寫入完成")
+
+    print(f"{'-' * 5} CMoney 資料處理完畢 {'-' * 5}")
 
     excel.wb.close()
 
