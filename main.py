@@ -1,4 +1,5 @@
 from collections import defaultdict
+from datetime import datetime
 
 from bs4 import BeautifulSoup
 import requests
@@ -438,6 +439,30 @@ class ExcelWriter:
             recude_data_col_end_code,
         )
 
+    def write_date(self, data_date: str, trading_date: str):
+        """寫入日期資料
+
+        Args:
+            data_date (str): 資料日期
+            trading_date (str): 交易日期
+        """
+
+        data_date_col = ["A4", "N4", "AA4", "AN4", "BA4", "BN4", "CA4", "CN4"]
+        tading_date_col = ["B4", "O4", "AB4", "AO4", "BB4", "BO4", "CB4", "CO4"]
+
+        s1 = self.wb["漲跌幅-前五族群前三檔"]
+        s2 = self.wb["資金流向-前十族群前三檔"]
+
+        for col in data_date_col:
+            s1[col].value = data_date
+            s2[col].value = data_date
+
+        for col in tading_date_col:
+            s1[col].value = trading_date
+            s2[col].value = trading_date
+
+        self.wb.save(self.save_name)
+
 
 if __name__ == "__main__":
     statement_dog = StatementDog()
@@ -448,6 +473,11 @@ if __name__ == "__main__":
     stokc_price_all_day = stokc_price.get_stock_day_all()
     mainborad_price_all_day = stokc_price.get_mainborad_day_all()
     print("處理完成")
+
+    excel.write_date(
+        datetime.now().strftime("%Y-%m-%d"),
+        datetime.strftime(datetime.strptime(stokc_price.TRADING_DATE, "%Y%m%d"), "%Y-%m-%d"),
+    )
 
     print(f"{'-' * 5} 爬取財報狗資料 {'-' * 5}")
 
