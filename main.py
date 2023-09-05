@@ -187,26 +187,33 @@ class StockPrice:
     取得股票的每日交易價格相關的類別
     """
 
+    TRADING_DATE = None
+
     @staticmethod
     def _translate_stock_data(stock_data: dict) -> dict:
         """
         處理由證交所 API 取得的每日交易資訊，只留下必要的資料
         (代碼、名稱、開高低收)
+
+        NOTE: 會給 `StockPrice.TRADING_DATE` 複寫成 API 回傳的資料日期
         """
 
         result = {}
 
-        for data in stock_data:
+        # 這邊的處理要看 https://www.twse.com.tw/exchangeReport/STOCK_DAY_ALL 這隻 API 的回傳格式
+        for data in stock_data["data"]:
             tmp = {
-                "code": data["Code"],
-                "name": data["Name"],
-                "opening_price": float(data["OpeningPrice"]) if data["OpeningPrice"] else None,
-                "highest_price": float(data["HighestPrice"]) if data["HighestPrice"] else None,
-                "lowest_price": float(data["LowestPrice"]) if data["LowestPrice"] else None,
-                "cloesing_price": float(data["ClosingPrice"]) if data["ClosingPrice"] else None,
+                "code": data[0],
+                "name": data[1],
+                "opening_price": float(data[4].replace(",", "")) if data[4] else None,
+                "highest_price": float(data[5].replace(",", "")) if data[5] else None,
+                "lowest_price": float(data[6].replace(",", "")) if data[6] else None,
+                "cloesing_price": float(data[7].replace(",", "")) if data[7] else None,
             }
 
-            result[data["Code"]] = tmp
+            result[data[0]] = tmp
+
+        StockPrice.TRADING_DATE = stock_data["date"]
 
         return result
 
@@ -252,10 +259,7 @@ class StockPrice:
         ```
         """
 
-        # TODO 要改成用 https://www.twse.com.tw/exchangeReport/STOCK_DAY_ALL 這邊的資料會比較準確
-        response = BaseRequset.get_requset(
-            "https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL"
-        )
+        response = BaseRequset.get_requset("https://www.twse.com.tw/exchangeReport/STOCK_DAY_ALL")
 
         return StockPrice._translate_stock_data(response.json())
 
