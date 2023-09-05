@@ -1,5 +1,6 @@
+import os
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from bs4 import BeautifulSoup
 import requests
@@ -464,10 +465,109 @@ class ExcelWriter:
         self.wb.save(self.save_name)
 
 
+class ExeclUpdater:
+    """
+    更新前一天的 execl 檔案的股票資訊
+    """
+
+    def __init__(self, filename: str):
+        """
+
+        filename (str): 要更新的 excel 檔案路徑
+        """
+
+        self.wb = openpyxl.load_workbook(filename)
+        self.save_name = filename
+
+    def _write_data(
+        self,
+        worksheet_name: str,
+        data_number: int,
+        stock_price_all_day: dict,
+        mainborad_price_all_day: dict,
+    ):
+        """將資料寫入至指定的工作區
+
+        Args:
+            worksheet_name (str): 工作區名稱
+            data_number (int): 資料的總數
+            stock_price_all_day (dict): 上市股票的交易資料
+            mainborad_price_all_day (dict): 上櫃股票的交易資料
+        """
+
+        s1 = self.wb[worksheet_name]
+
+        stock_code_col = ["C", "P", "AC", "AP", "BC", "BP", "CC", "CP"]
+        stock_data_col = [
+            ["I", "L"],
+            ["V", "Y"],
+            ["AI", "AL"],
+            ["AV", "AY"],
+            ["BI", "BL"],
+            ["BV", "BY"],
+            ["CI", "CL"],
+            ["CV", "CY"],
+        ]
+
+        for i, col in enumerate(stock_code_col):
+            for j in range(data_number):
+                stock_code = s1[f"{col}{6 + j}"].value
+
+                if stock_code:
+                    if stock_price_all_day.get(str(stock_code)):
+                        data = stokc_price_all_day[str(stock_code)]
+
+                    elif mainborad_price_all_day.get(str(stock_code)):
+                        data = mainborad_price_all_day[str(stock_code)]
+
+                    else:
+                        continue
+
+                else:
+                    continue
+
+                data_cell_range = s1[
+                    f"{stock_data_col[i][0]}{6 + j}":f"{stock_data_col[i][1]}{6 + j}"
+                ]
+
+                data_cell_range[0][0].value = (
+                    data["opening_price"] if data["opening_price"] else "null"
+                )
+                data_cell_range[0][1].value = (
+                    data["highest_price"] if data["highest_price"] else "null"
+                )
+                data_cell_range[0][2].value = (
+                    data["lowest_price"] if data["lowest_price"] else "null"
+                )
+                data_cell_range[0][3].value = (
+                    data["cloesing_price"] if data["cloesing_price"] else "null"
+                )
+
+        self.wb.save(self.save_name)
+
+    def update_file(self, stock_price_all_day: dict, mainborad_price_all_day: dict):
+        """更新股票資料
+
+        Args:
+            stock_price_all_day (dict): 上市股票的交易資料
+            mainborad_price_all_day (dict): 上櫃股票的交易資料
+        """
+
+        self._write_data("漲跌幅-前五族群前三檔", 15, stock_price_all_day, mainborad_price_all_day)
+        self._write_data("資金流向-前十族群前三檔", 30, stock_price_all_day, mainborad_price_all_day)
+
+
 if __name__ == "__main__":
+    # 取得今天日期
+    today_date = datetime.now().strftime("%Y-%m-%d")
+
+    base_dir = os.path.abspath(os.path.dirname(__name__))
+
     statement_dog = StatementDog()
     stokc_price = StockPrice()
-    excel = ExcelWriter("./base.xlsx", "test4.xlsx")
+    excel = ExcelWriter(
+        os.path.join(base_dir, "base.xlsx"), os.path.join(base_dir, "data", f"{today_date}.xlsx")
+    )
 
     print("取得股票交易資料....")
     stokc_price_all_day = stokc_price.get_stock_day_all()
@@ -475,7 +575,7 @@ if __name__ == "__main__":
     print("處理完成")
 
     excel.write_date(
-        datetime.now().strftime("%Y-%m-%d"),
+        today_date,
         datetime.strftime(datetime.strptime(stokc_price.TRADING_DATE, "%Y%m%d"), "%Y-%m-%d"),
     )
 
@@ -529,4 +629,31 @@ if __name__ == "__main__":
     print(f"{'-' * 5} 財報狗資料處理完畢 {'-' * 5}")
 
     excel.wb.close()
+
+    # 更新資料
+    today_weekday = datetime.today().weekday()
+
+    # 星期一
+    if today_weekday == 0:
+        subtract_number = 3
+
+    else:
+        subtract_number = 1
+
+    pre_date = datetime.now() - timedelta(days=subtract_number)
+    pre_date_str = pre_date.strftime("%Y-%m-%d")
+
+    pre_filename = os.path.join(base_dir, "data", f"{pre_date_str}.xlsx")
+
+    if os.path.exists(pre_filename):
+        print(f"{'-' * 5} 更新前一天的資料 {'-' * 5}")
+
+        print(f"更新 [{pre_filename}]")
+        excel_updater = ExeclUpdater(pre_filename)
+        excel_updater.update_file(stokc_price_all_day, mainborad_price_all_day)
+        print("更新完成")
+
+    else:
+        print(f"找不到 {pre_filename} 因此跳過更新")
+
     print("程式執行結束")
