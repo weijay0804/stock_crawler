@@ -920,7 +920,7 @@ if __name__ == "__main__":
 
     print(f"{'-' * 5} 爬取 CMoney 資料 {'-' * 5}")
 
-    cmoney = CMoney(is_headless=False)
+    cmoney = CMoney()
 
     print("取得 [1day] 資料...")
 
