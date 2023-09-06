@@ -62,7 +62,16 @@ class CMoney:
         # 取前 10 個
         for item in items[1:11]:
             url = item.find_element(By.TAG_NAME, "a").get_attribute("href")
-            name = item.text.split(" ")[0]
+
+            group_meta_data = item.text.split(" ")
+
+            # 防止名稱出現像 "概念股_iPhone 12" 這種情況
+            # 這邊的 7 這個數字是依據 https://www.cmoney.tw/finance/f00018.aspx?o=1&o2=1 這個網頁上的表格欄位數量
+            if len(group_meta_data) > 7:
+                name = "".join(group_meta_data[0 : len(group_meta_data) - 7 + 1])
+
+            else:
+                name = group_meta_data[0]
 
             tmp = {"name": name, "url": url}
 
