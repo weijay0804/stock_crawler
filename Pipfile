@@ -7,10 +7,9 @@ name = "pypi"
 requests = "*"
 beautifulsoup4 = "*"
 selenium = "*"
-webdriver-manager = "*"
 openpyxl = "*"
 
 [dev-packages]
 
 [requires]
-python_version = "3.10"
+python_version = "3.9"
