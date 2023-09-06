@@ -34,9 +34,17 @@
   pipenv shell
   ```
 
-- 安裝瀏覽器 dirver  
+- 安裝瀏覽器 driver  
 
-  到 [這個](https://sites.google.com/a/chromium.org/chromedriver/downloads) 頁面中，並根據你的 chorme 版本選擇對應的 driver，點進去後根據你的作業系統下載對應的檔案。
+  - 查看 chrome 版本：
+    打開 chrome 後按右上角的三個小點點的按鈕 -> 設定 -> 關於 chrome
+
+  - 下載 driver
+    
+    如果 chrome 的版本是 `115` 以下，請前往 [這個](https://sites.google.com/chromium.org/driver/downloads?authuser=0) 頁面  
+    如果是 `115` 以上，請前往 [這個](https://googlechromelabs.github.io/chrome-for-testing/) 頁面  
+
+    根據你的 chorme 版本選擇對應的 driver，點進去後根據你的作業系統下載對應的檔案。
 
   *注意*：不要更改下載檔案的檔名，檔名應該會是 `chromedriver`
 
@@ -50,7 +58,3 @@
 執行完畢後，資料會放在 `data` 資料夾中
 
 *注意*：不要更改 `data` 資料夾中的 excel 檔名，程式會根據檔名執行更新。
-
-  
-  
-  
