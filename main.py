@@ -407,7 +407,17 @@ class StatementDog:
                         tmp["data"].append(mainborad_price_data[stock[0]])
 
                     else:
-                        tmp["data"].append(None)
+                        # 如果找不到股票資料
+                        tmp["data"].append(
+                            {
+                                "code": stock[0],
+                                "name": stock[1],
+                                "opening_price": None,
+                                "highest_price": None,
+                                "lowest_price": None,
+                                "cloesing_price": None,
+                            }
+                        )
 
                 result[k].append(tmp)
 
