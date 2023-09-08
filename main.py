@@ -27,6 +27,143 @@ class BaseRequset:
         return response
 
 
+class _BaseCrawler:
+    """
+    針對 CMoney 和 財報狗爬蟲的 interface
+    """
+
+    def _get_group_data(self) -> list:
+        """
+        取得產業類別的資料
+
+        回傳格式:
+        ```
+        [
+            {"name" : "IC-設計", "url" : "http...."},...
+        ]
+        ```
+        """
+
+        raise NotImplementedError
+
+    def _get_increase_reduce_group_data(self, day_type_arg: str = "1day") -> dict:
+        """
+        取得增加、減少的產業類別的資料
+
+        Args:
+
+        day_type_arg (str): 指定天數參數 (1day, 1week, 1month, 3months)
+
+        回傳格式:
+        ```
+        {
+        "increase" : [{"name" : "砷化鎵", "url" : "http...."}, ...],
+        "reduce" : [{"name" : "家電", "url" : "http...."}, ...]
+        }
+        ```
+        """
+
+        raise NotImplementedError
+
+    def _get_top_3_stock_of_group_data(self, url: str, group_name: str) -> dict:
+        """
+        取得產業類別的前三名股票資料
+
+        Args:
+
+        url (str): 產業類別的股票詳細頁面 url
+
+        group_name (str): 產業類別名稱
+
+        回傳格式:
+        ```
+        {
+        "group" : "砷化鎵",
+        "data" : [["3105", "穩懋"], ["2455", "全新"], ["8086", "宏捷科"]]
+        }
+        ```
+        """
+
+        raise NotImplementedError
+
+    def _get_data(self, day_type_arg: str = "1day") -> dict:
+        """
+        取得增加、減少的產業類別資料，和股票的資料
+
+        Args:
+
+        day_type_arg (str): 指定天數參數 (1day, 1week, 1month, 3months)
+
+        回傳格式:
+        ```
+        {
+        "increase" : [
+            {
+                "group" : "砷化鎵",
+                "data" : [["3105" : "穩懋"], ...]
+            }, ...],
+        "reduce" : [
+            {
+                "group" : "LCD塑膠框",
+                "data" : [["2371" : "大同"]. ...]
+            }, ...]
+        }
+        ```
+        """
+
+        raise NotImplementedError
+
+    def get_data(
+        self, Listed_price_data: dict, OTC_price_data: dict, day_type_arg: str = "1day"
+    ) -> dict:
+        """
+        取得最終處裡完的資料。
+        換句話說，就是取得增加、減少的產業資料和股票名稱、代碼，和開高低收資料
+
+        Args:
+
+        Listed_price_data (dict): 上市公司股票交易資料
+
+        OTC_price_data (dict): 上櫃公司股票交易資料
+
+        data_type_arg (str): 指定天數參數 (1day, 1week, 1month, 3months)
+
+        回傳格式:
+        ```
+        {
+        "increase" : [
+            {"group" : "砷化鎵", "data" : [
+                {"code" : "3105", "name" : "穩懋", "opening_price" : 101.1, "highest_price" : 120.0, "lowest_price" : 100.0, "cloesing_price" : 102.2}, ...]
+            }, ...],
+        "reduce: [....]
+        }
+        ```
+        """
+
+        result = defaultdict(list)
+        meta_data = self._get_data(day_type_arg)
+
+        for k in meta_data:
+            for group_data in meta_data[k]:
+                tmp = {}
+                tmp["group"] = group_data["group"]
+                tmp["data"] = []
+
+                for stock in group_data["data"]:
+                    if Listed_price_data.get(stock[0]):
+                        tmp["data"].append(Listed_price_data[stock[0]])
+
+                    elif OTC_price_data.get(stock[0]):
+                        tmp["data"].append(OTC_price_data[stock[0]])
+
+                    else:
+                        tmp["data"].append(None)
+
+                result[k].append(tmp)
+
+        return result
+
+
 class CMoney:
     """
     處理有關 CMoney 相關的類別
