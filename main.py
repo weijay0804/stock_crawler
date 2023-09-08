@@ -157,9 +157,94 @@ class _BaseCrawler:
                         tmp["data"].append(OTC_price_data[stock[0]])
 
                     else:
-                        tmp["data"].append(None)
+                        # 如果找不到股票資料
+                        tmp["data"].append(
+                            {
+                                "code": stock[0],
+                                "name": stock[1],
+                                "opening_price": None,
+                                "highest_price": None,
+                                "lowest_price": None,
+                                "cloesing_price": None,
+                            }
+                        )
 
                 result[k].append(tmp)
+
+        return result
+
+
+class StatementDogCrawler(_BaseCrawler):
+    """
+    財報狗爬蟲
+
+    使用 API 和解析 HTML 獲得資料
+    """
+
+    def _get_increase_reduce_group_data(self, day_type_arg: str = "1day") -> dict:
+        response = BaseRequset.get_requset(
+            f"https://statementdog.com/api/v1/market-trend/tw/{day_type_arg}"
+        )
+
+        datas = response.json()["data"]
+
+        if not datas:
+            raise RuntimeError(f"Error: 取得財報狗 [{day_type_arg}] 的增加減少產業族群資料時發生錯誤.")
+
+        sorted_datas = sorted(datas, key=lambda i: i["diff_percentage"], reverse=True)
+
+        get_group_data = lambda s: [{"name": d["name"], "url": d["url"]} for d in sorted_datas[s]]
+
+        increase = get_group_data(slice(0, 5))
+
+        reduce = get_group_data(slice(-1, -6, -1))
+
+        result = {}
+
+        result["increase"] = increase
+        result["reduce"] = reduce
+
+        return result
+
+    def _get_top_3_stock_of_group_data(self, url: str, group_name: str) -> dict:
+        response = BaseRequset.get_requset(f"{url}?country=tw")
+
+        soup = BeautifulSoup(response.text, "html.parser")
+
+        tbody = soup.find("tbody", id="stock-tags-list-body")
+
+        items = tbody.find_all("td", class_="stock-tags-list-item ticker-name")
+
+        stock_list = []
+
+        for item in items:
+            code_name = item.text.replace("\n", "").split(" ")
+
+            # 針對像 [1111, "iphone", "12"] 這樣的資料進行處理
+            if len(code_name) > 2:
+                code_name = [code_name[0], "".join(code_name[1:])]
+
+            stock_list.append(code_name)
+
+        stock_list = stock_list[:3]
+
+        result = {}
+
+        result["group"] = group_name
+        result["data"] = stock_list
+
+        return result
+
+    def _get_data(self, day_type_arg: str = "1day") -> dict:
+        result = defaultdict(list)
+
+        group_stock_data = self._get_increase_reduce_group_data(day_type_arg)
+
+        for k in group_stock_data:
+            for group in group_stock_data[k]:
+                increase_reduce = self._get_top_3_stock_of_group_data(group["url"], group["name"])
+
+                result[k].append(increase_reduce)
 
         return result
 
@@ -387,178 +472,6 @@ class CMoney:
         """關閉瀏覽器 driver"""
 
         self.driver.close()
-
-
-class StatementDog:
-    """
-    處理有關財報狗相關的類別
-    """
-
-    @staticmethod
-    def get_market_focus(arg: str = "1day") -> dict:
-        """
-        取得市場焦點的前三名和後三名的產業類別
-
-        args: 要取得的天數 (1day, 1week, 1month, 3months)
-
-        i.e:
-        ```
-        {
-        "top" : [{"name" : "砷化鎵", "diff_percentage" : 3.87, "url" : "http...."}, ...],
-        "last" : [{"name" : "家電", "diff_percentage" : -8.23, "url" : "http...."}, ...]
-        }
-        ```
-        """
-
-        response = BaseRequset.get_requset(f"https://statementdog.com/api/v1/market-trend/tw/{arg}")
-
-        datas = response.json()["data"]
-
-        sorted_datas = sorted(datas, key=lambda i: i["diff_percentage"], reverse=True)
-
-        top = sorted_datas[:5]
-        last = sorted_datas[-1:-6:-1]
-
-        result = {}
-
-        result["top"] = top
-        result["last"] = last
-
-        return result
-
-    @staticmethod
-    def get_group_top_last_3(url: str, name: str) -> dict:
-        """
-        取得產業類別中的前三名股票名稱、代號
-
-        url: 產業詳細頁面 url
-        name: 產業名稱
-
-        i.e:
-        ```
-        {
-        "group" : "砷化鎵",
-        "data" : [["3105", "穩懋"], ["2455", "全新"], ["8086", "宏捷科"]]
-        }
-        ```
-        """
-
-        response = BaseRequset.get_requset(f"{url}?country=tw")
-
-        soup = BeautifulSoup(response.text, "html.parser")
-
-        tbody = soup.find("tbody", id="stock-tags-list-body")
-
-        items = tbody.find_all("td", class_="stock-tags-list-item ticker-name")
-
-        stock_list = []
-
-        for item in items:
-            code_name = item.text.replace("\n", "").split(" ")
-
-            if len(code_name) > 2:
-                code_name = [code_name[0], "".join(code_name[1:])]
-
-            stock_list.append(code_name)
-
-        stock_list = stock_list[:3]
-
-        result = {}
-
-        result["group"] = name
-        result["data"] = stock_list
-
-        return result
-
-    @staticmethod
-    def get_data(arg: str = "1day") -> dict:
-        """
-        取得市場焦點和每個產業的股票
-
-        args: 要取得的天數 (1day, 1week, 1month, 3months)
-
-        i.e:
-        ```
-        {
-        "top" : [
-            {
-                "group" : "砷化鎵",
-                "data" : [["3105" : "穩懋"], ...]
-            }, ...],
-        "last" : [
-            {
-                "group" : "LCD塑膠框",
-                "data" : [["2371" : "大同"]. ...]
-            }, ...]
-        }
-        ```
-        """
-
-        result = defaultdict(list)
-
-        market_foucs_data = StatementDog.get_market_focus(arg)
-
-        for i in market_foucs_data:
-            for data in market_foucs_data[i]:
-                top_last_3 = StatementDog.get_group_top_last_3(data["url"], data["name"])
-
-                result[i].append(top_last_3)
-
-        return result
-
-    @staticmethod
-    def get_final_data(
-        stock_price_data: dict, mainborad_price_data: dict, arg: str = "1day"
-    ) -> dict:
-        """
-        取得最終處理完的資料，換句話說就是取得開高低收等資訊
-
-        args: 要取得的天數 (1day, 1week, 1month, 3months)
-
-        i.e:
-        ```
-        {
-        "top" : [
-            {"group" : "砷化鎵", "data" : [
-                {"code" : "3105", "name" : "穩懋", "opening_price" : 101.1, "highest_price" : 120.0, "lowest_price" : 100.0, "cloesing_price" : 102.2}, ...]
-            }, ...],
-        "last: [....]
-        }
-        ```
-        """
-
-        result = defaultdict(list)
-        meta_data = StatementDog.get_data(arg)
-
-        for k in meta_data:
-            for group_data in meta_data[k]:
-                tmp = {}
-                tmp["group"] = group_data["group"]
-                tmp["data"] = []
-
-                for stock in group_data["data"]:
-                    if stock_price_data.get(stock[0]):
-                        tmp["data"].append(stock_price_data[stock[0]])
-
-                    elif mainborad_price_data.get(stock[0]):
-                        tmp["data"].append(mainborad_price_data[stock[0]])
-
-                    else:
-                        # 如果找不到股票資料
-                        tmp["data"].append(
-                            {
-                                "code": stock[0],
-                                "name": stock[1],
-                                "opening_price": None,
-                                "highest_price": None,
-                                "lowest_price": None,
-                                "cloesing_price": None,
-                            }
-                        )
-
-                result[k].append(tmp)
-
-        return result
 
 
 class StockPrice:
@@ -804,7 +717,7 @@ class ExcelWriter:
             raise ValueError("Invalid value for 'day_type'")
 
         self._write_data(
-            statement_dog_data["top"],
+            statement_dog_data["increase"],
             5,
             "漲跌幅-前五族群前三檔",
             raise_group_col_code,
@@ -812,7 +725,7 @@ class ExcelWriter:
             raise_data_col_end_code,
         )
         self._write_data(
-            statement_dog_data["last"],
+            statement_dog_data["reduce"],
             5,
             "漲跌幅-前五族群前三檔",
             reduce_group_col_code,
@@ -1000,7 +913,7 @@ if __name__ == "__main__":
 
     base_dir = os.path.abspath(os.path.dirname(__name__))
 
-    statement_dog = StatementDog()
+    statement_dog_crawler = StatementDogCrawler()
     stokc_price = StockPrice()
     excel = ExcelWriter(
         os.path.join(base_dir, "base.xlsx"), os.path.join(base_dir, "data", f"{today_date}.xlsx")
@@ -1016,52 +929,24 @@ if __name__ == "__main__":
         datetime.strftime(datetime.strptime(stokc_price.TRADING_DATE, "%Y%m%d"), "%Y-%m-%d"),
     )
 
+    day_args_list = ["1day", "1week", "1month", "3months"]
+
     print(f"{'-' * 5} 爬取財報狗資料 {'-' * 5}")
 
-    print("取得 [1day] 資料...")
+    for day_arg in day_args_list:
+        print(f"取得 [{day_arg}] 資料...")
 
-    statement_dog_1day = statement_dog.get_final_data(
-        stokc_price_all_day, mainborad_price_all_day, "1day"
-    )
+        statement_dog_data = statement_dog_crawler.get_data(
+            stokc_price_all_day, mainborad_price_all_day, day_arg
+        )
 
-    print("爬取完成")
+        print("爬取完成")
 
-    print("寫入 excel...")
+        print("寫入 excel...")
 
-    excel.write_statement_dog_data(statement_dog_1day, "1day")
+        excel.write_statement_dog_data(statement_dog_data, day_arg)
 
-    print("寫入完成")
-
-    print("取得 [1week] 資料...")
-    statement_dog_1week = statement_dog.get_final_data(
-        stokc_price_all_day, mainborad_price_all_day, "1week"
-    )
-    print("爬取完成")
-
-    print("寫入 execl...")
-    excel.write_statement_dog_data(statement_dog_1week, "1week")
-    print("寫入完成")
-
-    print("取得 [1month] 資料...")
-    statement_dog_1month = statement_dog.get_final_data(
-        stokc_price_all_day, mainborad_price_all_day, "1month"
-    )
-    print("爬取完成")
-
-    print("寫入 excel...")
-    excel.write_statement_dog_data(statement_dog_1month, "1month")
-    print("寫入完成")
-
-    print("取得 [3months] 資料...")
-    statement_dog_3months = statement_dog.get_final_data(
-        stokc_price_all_day, mainborad_price_all_day, "3months"
-    )
-
-    print("爬取完成")
-
-    print("寫入 excel...")
-    excel.write_statement_dog_data(statement_dog_3months, "3months")
-    print("寫入完成")
+        print("寫入完成")
 
     print(f"{'-' * 5} 財報狗資料處理完畢 {'-' * 5}")
 
