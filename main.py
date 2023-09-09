@@ -325,8 +325,8 @@ class CMoneyCrawler(_BaseCrawler):
         )
         last_group_data = self._get_group_data()
 
-        result["top"] = top_group_data
-        result["last"] = last_group_data
+        result["increase"] = top_group_data
+        result["reduce"] = last_group_data
 
         return result
 
@@ -568,14 +568,28 @@ class ExcelWriter:
 
         self.wb.save(self.save_name)
 
-    def write_statement_dog_data(self, statement_dog_data: dict, day_type: str):
-        """將財報狗的資料寫入 execl
+    def _write_stock_data(self, stock_data: dict, day_type_arg: str, worksheet_name: str):
+        """將股票交易資料寫入 execl
 
-        statement_dog_data (dict): 財報狗的資料，由 ``StatementDog.get_final_data()`` 生成的資料
-        day_type (str): 資料的種類 ("1day", "1week", "1month", "3months")
+        stock_data (dict): 股票的交易資料
+
+        day_type_arg (str): 指定天數參數 (1day, 1week, 1month, 3months)
+
+        worksheet_name (str): 要將資料寫入至哪個工作區 (漲跌幅-前五族群前三檔, 資金流向-前十族群前三檔)
+
+        stock_data 的資料格式必須符合 `_BaseCrawler.get_data()` 生成的資料格式
         """
 
-        if day_type == "1day":
+        if worksheet_name == "漲跌幅-前五族群前三檔":
+            group_number = 5
+
+        elif worksheet_name == "資金流向-前十族群前三檔":
+            group_number = 10
+
+        else:
+            raise ValueError("worksheet_name 參數錯誤, 應該是 '漲跌幅-前五族群前三檔' 或 '資金流向-前十族群前三檔'")
+
+        if day_type_arg == "1day":
             raise_group_col_code = "A"
             raise_data_col_start_code = "C"
             raise_data_col_end_code = "H"
@@ -584,7 +598,7 @@ class ExcelWriter:
             reduce_data_col_start_code = "BC"
             recude_data_col_end_code = "BH"
 
-        elif day_type == "1week":
+        elif day_type_arg == "1week":
             raise_group_col_code = "N"
             raise_data_col_start_code = "P"
             raise_data_col_end_code = "U"
@@ -593,7 +607,7 @@ class ExcelWriter:
             reduce_data_col_start_code = "BP"
             recude_data_col_end_code = "BU"
 
-        elif day_type == "1month":
+        elif day_type_arg == "1month":
             raise_group_col_code = "AA"
             raise_data_col_start_code = "AC"
             raise_data_col_end_code = "AH"
@@ -602,7 +616,7 @@ class ExcelWriter:
             reduce_data_col_start_code = "CC"
             recude_data_col_end_code = "CH"
 
-        elif day_type == "3months":
+        elif day_type_arg == "3months":
             raise_group_col_code = "AN"
             raise_data_col_start_code = "AP"
             raise_data_col_end_code = "AU"
@@ -615,78 +629,47 @@ class ExcelWriter:
             raise ValueError("Invalid value for 'day_type'")
 
         self._write_data(
-            statement_dog_data["increase"],
-            5,
-            "漲跌幅-前五族群前三檔",
+            stock_data["increase"],
+            group_number,
+            worksheet_name,
             raise_group_col_code,
             raise_data_col_start_code,
             raise_data_col_end_code,
         )
         self._write_data(
-            statement_dog_data["reduce"],
-            5,
-            "漲跌幅-前五族群前三檔",
+            stock_data["reduce"],
+            group_number,
+            worksheet_name,
             reduce_group_col_code,
             reduce_data_col_start_code,
             recude_data_col_end_code,
         )
 
-    def write_cmoney_data(self, cmoney_data: dict, day_type: str = "1day"):
-        if day_type == "1day":
-            raise_group_col_code = "A"
-            raise_data_col_start_code = "C"
-            raise_data_col_end_code = "H"
+    def write_statement_dog_data(self, stock_data: dict, day_type_arg: str):
+        """
+        將財報狗的資料寫入 excel
 
-            reduce_group_col_code = "BA"
-            reduce_data_col_start_code = "BC"
-            recude_data_col_end_code = "BH"
+        stock_data (dict): 股票的交易資料
 
-        elif day_type == "1week":
-            raise_group_col_code = "N"
-            raise_data_col_start_code = "P"
-            raise_data_col_end_code = "U"
+        day_type_arg (str): 指定天數參數 (1day, 1week, 1month, 3months)
 
-            reduce_group_col_code = "BN"
-            reduce_data_col_start_code = "BP"
-            recude_data_col_end_code = "BU"
+        stock_data 的資料格式必須符合 `_BaseCrawler.get_data()` 生成的資料格式
+        """
 
-        elif day_type == "1month":
-            raise_group_col_code = "AA"
-            raise_data_col_start_code = "AC"
-            raise_data_col_end_code = "AH"
+        self._write_stock_data(stock_data, day_type_arg, "漲跌幅-前五族群前三檔")
 
-            reduce_group_col_code = "CA"
-            reduce_data_col_start_code = "CC"
-            recude_data_col_end_code = "CH"
+    def write_cmoney_data(self, stock_data: dict, day_type_arg: str):
+        """
+        將 CMoney 資料寫入 excel
 
-        elif day_type == "3months":
-            raise_group_col_code = "AN"
-            raise_data_col_start_code = "AP"
-            raise_data_col_end_code = "AU"
+        stock_data (dict): 股票的交易資料
 
-            reduce_group_col_code = "CN"
-            reduce_data_col_start_code = "CP"
-            recude_data_col_end_code = "CU"
+        day_type_arg (str): 指定天數參數 (1day, 1week, 1month, 3months)
 
-        else:
-            raise ValueError("Invalid value for 'day_type'")
+        stock_data 的資料格式必須符合 `_BaseCrawler.get_data()` 生成的資料格式
+        """
 
-        self._write_data(
-            cmoney_data["top"],
-            10,
-            "資金流向-前十族群前三檔",
-            raise_group_col_code,
-            raise_data_col_start_code,
-            raise_data_col_end_code,
-        )
-        self._write_data(
-            cmoney_data["last"],
-            10,
-            "資金流向-前十族群前三檔",
-            reduce_group_col_code,
-            reduce_data_col_start_code,
-            recude_data_col_end_code,
-        )
+        self._write_stock_data(stock_data, day_type_arg, "資金流向-前十族群前三檔")
 
     def write_date(self, data_date: str, trading_date: str):
         """寫入日期資料
