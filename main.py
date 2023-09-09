@@ -373,7 +373,7 @@ class CMoney:
         self.driver.get(url)
         locator = (By.CLASS_NAME, "bk-clr")
         WebDriverWait(self.driver, 10).until(
-            EC.presence_of_all_elements_located(locator), "取得前三名股票頁面的資料時出現錯誤"
+            EC.presence_of_all_elements_located(locator), f"取得前三名股票頁面的資料時出現錯誤, url: {url}"
         )
 
         stock_table = self.driver.find_element(By.ID, "table1").find_elements(By.TAG_NAME, "tr")
@@ -871,7 +871,12 @@ class ExeclUpdater:
                         data = mainborad_price_all_day[str(stock_code)]
 
                     else:
-                        continue
+                        data = {
+                            "opening_price": None,
+                            "highest_price": None,
+                            "lowest_price": None,
+                            "cloesing_price": None,
+                        }
 
                 else:
                     continue
