@@ -249,11 +249,12 @@ class StatementDogCrawler(_BaseCrawler):
         return result
 
 
-class CMoney:
+class CMoneyCrawler(_BaseCrawler):
     """
-    處理有關 CMoney 相關的類別
 
-    會使用 selenium
+    CMoney 爬蟲
+
+    使用 selenium
     """
 
     def __init__(self, is_headless: bool = True):
@@ -266,17 +267,6 @@ class CMoney:
         self.driver = webdriver.Chrome(options=options)
 
     def _get_group_data(self) -> list:
-        """
-        取得前 10 個產業分類名稱
-
-        回傳格式:
-        ```
-        [
-            {"name" : "IC-設計", "url" : "http...."},...
-        ]
-        ```
-        """
-
         result = []
 
         items = self.driver.find_element(By.ID, "MainContent").find_elements(By.TAG_NAME, "tr")
@@ -301,49 +291,37 @@ class CMoney:
 
         return result
 
-    def get_group_data(self, day_arg: int = "1day") -> dict:
-        """
-        取得增加、減少各前 10 個產業名稱
-
-        day_arg (int): 指定天數參數 (1day, 1week, 1month, 3months)
-
-        回傳格式:
-        ```
-        {
-        "top" : [{"name" : "砷化鎵", "url" : "http...."}, ...],
-        "last" : [{"name" : "家電", "url" : "http...."}, ...]
-        }
-        ```
-        """
-
-        if day_arg == "1day":
-            arg = 1
-        elif day_arg == "1week":
-            arg = 2
-        elif day_arg == "1month":
-            arg = 3
-        elif day_arg == "3months":
-            arg = 4
+    def _get_increase_reduce_group_data(self, day_type_arg: str = "1day") -> dict:
+        if day_type_arg == "1day":
+            url_arg = 1
+        elif day_type_arg == "1week":
+            url_arg = 2
+        elif day_type_arg == "1month":
+            url_arg = 3
+        elif day_type_arg == "3months":
+            url_arg = 4
         else:
             raise ValueError("Invalid value for 'day_arg'")
 
         # 增加和減少的 url
-        top_url = f"https://www.cmoney.tw/finance/f00018.aspx?o=1&o2={arg}"
-        last_url = f"https://www.cmoney.tw/finance/f00018.aspx?o=2&o2={arg}"
+        top_url = f"https://www.cmoney.tw/finance/f00018.aspx?o=1&o2={url_arg}"
+        last_url = f"https://www.cmoney.tw/finance/f00018.aspx?o=2&o2={url_arg}"
 
         result = {}
 
         self.driver.get(top_url)
         locator = (By.CLASS_NAME, "up")
         WebDriverWait(self.driver, 10).until(
-            EC.presence_of_all_elements_located(locator), "取得增加頁面的資料時出現錯誤"
+            EC.presence_of_all_elements_located(locator),
+            f"Error: 取得增加頁面的資料時出現錯誤, day_type_arg: [{day_type_arg}]",
         )
         top_group_data = self._get_group_data()
 
         self.driver.get(last_url)
         locator = (By.CLASS_NAME, "down")
         WebDriverWait(self.driver, 10).until(
-            EC.presence_of_all_elements_located(locator), "取得減少頁面的資料時出現錯誤"
+            EC.presence_of_all_elements_located(locator),
+            f"Error: 取得減少頁面的資料時出現錯誤, day_type_arg: [{day_type_arg}]",
         )
         last_group_data = self._get_group_data()
 
@@ -352,28 +330,13 @@ class CMoney:
 
         return result
 
-    def get_group_top_stock(self, url: str, group_name: str) -> dict:
-        """
-        取得特定產業的前三名股票名稱、代號
-
-        url (str): 產業詳細頁面 url
-        group_name (str): 產業名稱
-
-        回傳格式:
-        ```
-        {
-        "group" : "砷化鎵",
-        "data" : [["3105", "穩懋"], ["2455", "全新"], ["8086", "宏捷科"]]
-        }
-        ```
-        """
-
+    def _get_top_3_stock_of_group_data(self, url: str, group_name: str) -> dict:
         result = {}
 
         self.driver.get(url)
         locator = (By.CLASS_NAME, "bk-clr")
         WebDriverWait(self.driver, 10).until(
-            EC.presence_of_all_elements_located(locator), f"取得前三名股票頁面的資料時出現錯誤, url: {url}"
+            EC.presence_of_all_elements_located(locator), f"Error: 取得前三名股票頁面的資料時出現錯誤, url: {url}"
         )
 
         stock_table = self.driver.find_element(By.ID, "table1").find_elements(By.TAG_NAME, "tr")
@@ -390,81 +353,16 @@ class CMoney:
 
         return result
 
-    def get_data(self, day_arg: str = "1day") -> dict:
-        """
-        取得資金流向的前十產業和股票
-
-        args: 要取得的天數 (1day, 1week, 1month, 3months)
-
-        回傳格式:
-        ```
-        {
-        "top" : [
-            {
-                "group" : "砷化鎵",
-                "data" : [["3105" : "穩懋"], ...]
-            }, ...],
-        "last" : [
-            {
-                "group" : "LCD塑膠框",
-                "data" : [["2371" : "大同"]. ...]
-            }, ...]
-        }
-        ```
-        """
-
+    def _get_data(self, day_type_arg: str = "1day") -> dict:
         result = defaultdict(list)
 
-        data = self.get_group_data(day_arg)
+        data = self._get_increase_reduce_group_data(day_type_arg)
 
         for i in data:
             for d in data[i]:
-                top_3_stock = self.get_group_top_stock(d["url"], d["name"])
+                stock_data = self._get_top_3_stock_of_group_data(d["url"], d["name"])
 
-                result[i].append(top_3_stock)
-
-        return result
-
-    def get_final_data(
-        self, stock_price_data: dict, mainborad_price_data: dict, day_arg: str = "1day"
-    ) -> dict:
-        """
-        取得最終處理完的資料，換句話說就是取得開高低收等資訊
-
-        args: 要取得的天數 (1day, 1week, 1month, 3months)
-
-        i.e:
-        ```
-        {
-        "top" : [
-            {"group" : "砷化鎵", "data" : [
-                {"code" : "3105", "name" : "穩懋", "opening_price" : 101.1, "highest_price" : 120.0, "lowest_price" : 100.0, "cloesing_price" : 102.2}, ...]
-            }, ...],
-        "last: [....]
-        }
-        ```
-        """
-
-        result = defaultdict(list)
-        meta_data = self.get_data(day_arg)
-
-        for k in meta_data:
-            for group_data in meta_data[k]:
-                tmp = {}
-                tmp["group"] = group_data["group"]
-                tmp["data"] = []
-
-                for stock in group_data["data"]:
-                    if stock_price_data.get(stock[0]):
-                        tmp["data"].append(stock_price_data[stock[0]])
-
-                    elif mainborad_price_data.get(stock[0]):
-                        tmp["data"].append(mainborad_price_data[stock[0]])
-
-                    else:
-                        tmp["data"].append(None)
-
-                result[k].append(tmp)
+                result[i].append(stock_data)
 
         return result
 
@@ -957,44 +855,20 @@ if __name__ == "__main__":
 
     print(f"{'-' * 5} 爬取 CMoney 資料 {'-' * 5}")
 
-    cmoney = CMoney()
+    cmoney_crawler = CMoneyCrawler(is_headless=False)
 
-    print("取得 [1day] 資料...")
+    for day_arg in day_args_list:
+        print(f"取得 [{day_arg}] 資料...")
 
-    cmoney_1day = cmoney.get_final_data(stokc_price_all_day, mainborad_price_all_day, "1day")
+        cmoney_data = cmoney_crawler.get_data(stokc_price_all_day, mainborad_price_all_day, day_arg)
 
-    print("爬取完成")
+        print("爬取完成")
 
-    print("寫入 excel...")
+        print("寫入 excel...")
 
-    excel.write_cmoney_data(cmoney_1day, "1day")
+        excel.write_cmoney_data(cmoney_data, day_arg)
 
-    print("寫入完成")
-
-    print("取得 [1week] 資料...")
-    cmoney_1week = cmoney.get_final_data(stokc_price_all_day, mainborad_price_all_day, "1week")
-    print("爬取完成")
-
-    print("寫入 execl...")
-    excel.write_cmoney_data(cmoney_1week, "1week")
-    print("寫入完成")
-
-    print("取得 [1month] 資料...")
-    cmoney_1month = cmoney.get_final_data(stokc_price_all_day, mainborad_price_all_day, "1month")
-    print("爬取完成")
-
-    print("寫入 excel...")
-    excel.write_cmoney_data(cmoney_1month, "1month")
-    print("寫入完成")
-
-    print("取得 [3months] 資料...")
-    cmoney_3months = cmoney.get_final_data(stokc_price_all_day, mainborad_price_all_day, "3months")
-
-    print("爬取完成")
-
-    print("寫入 excel...")
-    excel.write_cmoney_data(cmoney_3months, "3months")
-    print("寫入完成")
+        print("寫入完成")
 
     print(f"{'-' * 5} CMoney 資料處理完畢 {'-' * 5}")
 
